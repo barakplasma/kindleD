@@ -34,6 +34,9 @@ jobs:
           cache: false
       - run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
       - run: actionlint
+      # The Kindle launcher has to run under busybox ash, so check it as
+      # POSIX sh rather than bash.
+      - run: shellcheck -s sh scripts/*.sh
 
   kindle:
     name: kindled (Go)

@@ -65,7 +65,7 @@ jobs:
           find artifacts -type f \( -name 'kindled-*' -o -name '*.apk' \) \
             -exec cp {} release/ \;
           cd release
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > SHA256SUMS
           ls -l
 
       - name: Create the release

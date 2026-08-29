@@ -17,9 +17,12 @@ echo "building kindled for armv7..."
 make -C kindle kindled
 
 echo "installing to $USER@$HOST:$DEST ..."
+# $DEST is expanded here, on purpose: it is a local variable, not a remote one.
+# shellcheck disable=SC2029
 ssh "$USER@$HOST" "mkdir -p $DEST"
 scp kindle/kindled "$USER@$HOST:$DEST/kindled"
 scp scripts/kindled-start.sh "$USER@$HOST:$DEST/kindled-start.sh"
+# shellcheck disable=SC2029
 ssh "$USER@$HOST" "chmod +x $DEST/kindled $DEST/kindled-start.sh"
 
 cat <<MSG
