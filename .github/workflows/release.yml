@@ -92,8 +92,12 @@ jobs:
           `apksigner` before installing, or use the `-debug` build.
           NOTES
           )
+          # --target pins the tag to the commit this run built. Without it
+          # gh would tag the default branch's head, which is not
+          # necessarily what was just tested and packaged.
           gh release create "$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
             --title "$VERSION" \
             --notes "$notes" \
             release/*
