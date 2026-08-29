@@ -19,5 +19,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ github.sha }}
-      version-code: ${{ github.run_number }}
+      # fromJSON because expression values are strings; the reusable
+      # workflow declares this input as a number.
+      version-code: ${{ fromJSON(github.run_number) }}
     secrets: inherit
