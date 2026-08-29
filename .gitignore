@@ -11,3 +11,5 @@
 /android/local.properties
 *.iml
 .idea/
+/android/app/build/
+/android/.kotlin/
