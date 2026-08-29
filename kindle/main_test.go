@@ -1,6 +1,19 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestVersionStringCarriesTheProtocol(t *testing.T) {
+	v := versionString()
+	if !strings.Contains(v, protocolVersion) {
+		t.Fatalf("version %q should name the protocol it speaks", v)
+	}
+	if !strings.Contains(v, buildVersion) {
+		t.Fatalf("version %q should carry the build stamp", v)
+	}
+}
 
 func TestParseEIPSInfo(t *testing.T) {
 	// Shape of `eips -i` on a Kindle: loose key/value pairs, and the

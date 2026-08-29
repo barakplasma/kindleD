@@ -1,5 +1,7 @@
 # Kindle as a Pixel display
 
+[![CI](https://github.com/barakplasma/kindleD/actions/workflows/ci.yml/badge.svg)](https://github.com/barakplasma/kindleD/actions/workflows/ci.yml)
+
 Use a jailbroken 2024 Kindle as a low-power e-ink display and scroll
 controller for a Pixel 10, over the Pixel's own Wi-Fi hotspot, with no
 router, no internet and no hotel Wi-Fi involved.
@@ -75,6 +77,50 @@ cd android
 ```
 
 Needs the Android SDK (platform 35, build-tools 35) and a JDK 17+.
+
+## Releases
+
+Both artifacts come out of the same workflow: `.github/workflows/build.yml`
+builds the Go binaries and the APK, CI calls it on every push, and the
+release workflow calls the identical thing on a tag. A release is never
+built differently from what CI already proved.
+
+Cutting one:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+That publishes `kindled-<version>-linux-armv7`,
+`kindled-<version>-linux-arm64`, the APK and a `SHA256SUMS` file. The
+version is stamped into both artifacts from the same tag -- `kindled
+-version` prints it, and it becomes the APK's `versionName`, with a
+`versionCode` derived from the semver so upgrades are accepted.
+
+`workflow_dispatch` builds a release by hand if you would rather not tag.
+
+### Signing the APK
+
+With no signing secrets configured the release APK is published unsigned
+rather than failing the build, alongside a debug-signed one you can install
+directly. To get a signed release APK, create a keystore and set four
+repository secrets:
+
+```
+keytool -genkey -v -keystore release.jks -keyalg RSA \
+    -keysize 2048 -validity 10000 -alias kindled
+base64 -w0 release.jks     # -> ANDROID_KEYSTORE_BASE64
+```
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the keystore, base64 encoded |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias (`kindled` above) |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+Keep the keystore. Android only accepts an upgrade signed with the same key.
 
 ## Install
 

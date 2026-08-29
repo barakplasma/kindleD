@@ -19,7 +19,14 @@ import (
 	"time"
 )
 
-const version = "kindled 1.0 (" + protocolVersion + ")"
+// buildVersion is stamped by the release build:
+//
+//	go build -ldflags "-X main.buildVersion=v1.2.3"
+var buildVersion = "dev"
+
+func versionString() string {
+	return "kindled " + buildVersion + " (" + protocolVersion + ")"
+}
 
 func main() {
 	var (
@@ -46,7 +53,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(version)
+		fmt.Println(versionString())
 		return
 	}
 
@@ -56,7 +63,7 @@ func main() {
 	if !*verbose {
 		debugf = func(string, ...interface{}) {}
 	}
-	log.Println(version)
+	log.Println(versionString())
 
 	w, h := panelSize(*width, *height, *eipsBin, logf)
 	log.Printf("panel %dx%d", w, h)

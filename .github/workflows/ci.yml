@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    # Branch filters already exclude tag pushes; releases run their own
+    # workflow, which calls this same build.
+    branches:
+      - "**"
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Same workflow the release uses, so nothing about a release build is
+    # untested by the time a tag is pushed.
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.sha }}
+      version-code: ${{ github.run_number }}
+    secrets: inherit

@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version to build, e.g. v0.1.0
+        required: true
+        type: string
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      version-code: ${{ steps.v.outputs.version_code }}
+    steps:
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ inputs.tag }}"
+          else
+            version="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # Android needs a monotonically increasing integer. Derive it from
+          # the semver so an upgrade over a previous release is accepted.
+          semver="${version#v}"
+          major=$(echo "$semver" | cut -d. -f1)
+          minor=$(echo "$semver" | cut -d. -f2)
+          patch=$(echo "$semver" | cut -d. -f3 | cut -d- -f1)
+          code=$(( ${major:-0} * 10000 + ${minor:-0} * 100 + ${patch:-0} ))
+          echo "version_code=${code:-1}" >> "$GITHUB_OUTPUT"
+          echo "building $version (versionCode $code)"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      version-code: ${{ fromJSON(needs.version.outputs.version-code) }}
+    secrets: inherit
+
+  publish:
+    name: Publish release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Gather artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name 'kindled-*' -o -name '*.apk' \) \
+            -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS
+          ls -l
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes=$(cat <<'NOTES'
+          Both halves of the link, built by the same workflow CI runs on
+          every push.
+
+          | Artifact | Goes on |
+          | --- | --- |
+          | `kindled-*-linux-armv7` | a jailbroken Kindle (32-bit userland) |
+          | `kindled-*-linux-arm64` | a Kindle with a 64-bit userland |
+          | `kindle-display-*.apk` | the Pixel |
+
+          The `kindled` binaries are static and dependency-free: copy one
+          onto the device and run it. See the README for install steps and
+          `PROTOCOL.md` for the wire protocol.
+
+          An APK marked `-unsigned` means no signing keystore was
+          configured in repository secrets; sign it yourself with
+          `apksigner` before installing, or use the `-debug` build.
+          NOTES
+          )
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION" \
+            --notes "$notes" \
+            release/*

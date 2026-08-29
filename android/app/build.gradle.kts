@@ -3,6 +3,16 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Release identity comes from the environment so CI can stamp a tag onto
+// the APK exactly the way it stamps one onto the Go binary.
+val releaseVersion: String = (System.getenv("KINDLED_VERSION") ?: "1.0").removePrefix("v")
+val releaseVersionCode: Int = System.getenv("KINDLED_VERSION_CODE")?.toIntOrNull() ?: 1
+
+// Signing is optional: with no keystore configured the release build is
+// produced unsigned rather than failing, so a fork can build one without
+// secrets. Set KEYSTORE_PATH and friends to get a signed, installable APK.
+val keystorePath: String? = System.getenv("KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.kindled.display"
     compileSdk = 35
@@ -13,13 +23,27 @@ android {
         // makes injecting touches into the virtual display possible.
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = releaseVersionCode
+        versionName = releaseVersion
+    }
+
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (keystorePath != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
