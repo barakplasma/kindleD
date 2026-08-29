@@ -11,6 +11,14 @@ on:
         required: true
         type: string
 
+# One release run per version at a time. A dispatch that errors at the API
+# but still queues its run -- which is how v0.1.0 ended up with a duplicate
+# -- would otherwise race a retry, and the loser spends four minutes
+# building before gh refuses to overwrite the release the winner published.
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   version:
     name: Resolve version
