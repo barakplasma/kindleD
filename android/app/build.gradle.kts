@@ -38,6 +38,24 @@ android {
         }
     }
 
+    // Two builds of the same app, differing only in whether the Kindle can
+    // control the phone or only watch it.
+    //
+    // The mirror flavour exists because declaring an accessibility service
+    // -- which is the only way to inject touches -- is by itself enough for
+    // Play Protect to block a sideloaded install. Mirror carries no such
+    // declaration, so it installs normally.
+    flavorDimensions += "input"
+
+    productFlavors {
+        create("mirror") {
+            dimension = "input"
+        }
+        create("control") {
+            dimension = "input"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

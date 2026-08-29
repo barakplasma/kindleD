@@ -211,9 +211,8 @@ class MainActivity : Activity() {
         blackoutButton.text =
             if (blackedOut) "Restore phone screen" else "Black out phone screen"
 
-        val a11y = if (KindleAccessibilityService.isEnabled) "on" else "OFF — taps will not work"
         val overlay = if (Settings.canDrawOverlays(this)) "on" else "OFF — cannot black out screen"
-        permissionView.text = "Accessibility: $a11y\nOverlay: $overlay"
+        permissionView.text = "Input: ${InputSupport.STATUS}\nOverlay: $overlay"
     }
 
     private fun requestNotificationPermissionIfNeeded() {

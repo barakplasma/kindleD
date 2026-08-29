@@ -257,11 +257,11 @@ class KindleDisplayService : Service(), KindleServer.Listener {
 
     override fun onTap(x: Int, y: Int) {
         val vd = display ?: return
-        val a11y = KindleAccessibilityService.instance ?: run {
-            publish("Enable the accessibility service to send taps")
+        val injector = InputSupport.injector() ?: run {
+            publish(InputSupport.unavailableReason())
             return
         }
-        a11y.tap(
+        injector.tap(
             vd.displayId,
             x.toFloat().coerceIn(0f, (vd.width - 1).toFloat()),
             y.toFloat().coerceIn(0f, (vd.height - 1).toFloat()),
@@ -278,8 +278,8 @@ class KindleDisplayService : Service(), KindleServer.Listener {
      */
     override fun onScroll(dy: Int) {
         val vd = display ?: return
-        val a11y = KindleAccessibilityService.instance ?: run {
-            publish("Enable the accessibility service to send scrolls")
+        val injector = InputSupport.injector() ?: run {
+            publish(InputSupport.unavailableReason())
             return
         }
         if (dy == 0) return
@@ -290,7 +290,7 @@ class KindleDisplayService : Service(), KindleServer.Listener {
         val direction = if (dy > 0) 1f else -1f
         val fromY = centerY + direction * span / 2f
         val toY = centerY - direction * span / 2f
-        a11y.swipe(vd.displayId, vd.width / 2f, fromY, toY)
+        injector.swipe(vd.displayId, vd.width / 2f, fromY, toY)
     }
 
     // ---- Notification ----------------------------------------------------
@@ -305,6 +305,16 @@ class KindleDisplayService : Service(), KindleServer.Listener {
         nm.createNotificationChannel(channel)
     }
 
+    // Lint checks that every <service> in the variant carries
+    // foregroundServiceType rather than resolving which one actually calls
+    // startForeground. In the control flavour the accessibility service is a
+    // second <service> element, and correctly has no such attribute, so lint
+    // reports it here. Verified: the merged manifest gives this service
+    // android:foregroundServiceType="connectedDevice", and putting the
+    // attribute on the accessibility service silences lint too -- which is
+    // how the misattribution was confirmed, and is not a change worth making
+    // since an accessibility service is not a foreground service.
+    @Suppress("ForegroundServiceType")
     private fun startForegroundTyped() {
         // minSdk is 30, so the typed overload always exists here.
         startForeground(

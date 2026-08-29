@@ -126,13 +126,15 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
+      # Both flavours, every time: they share almost everything, and the
+      # bug worth catching is the one that only appears in one of them.
       - name: Test
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: ./gradlew --no-daemon testMirrorDebugUnitTest testControlDebugUnitTest
 
       - name: Lint
         working-directory: android
-        run: ./gradlew --no-daemon lintDebug
+        run: ./gradlew --no-daemon lintMirrorDebug lintControlDebug
 
       - name: Assemble
         working-directory: android
@@ -140,21 +142,48 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon assembleDebug assembleRelease
+        run: ./gradlew --no-daemon assemble
 
       - name: Collect APKs
         working-directory: android
         run: |
           mkdir -p dist
-          for apk in app/build/outputs/apk/release/*.apk; do
-            [ -e "$apk" ] || continue
-            suffix=""
-            case "$apk" in *unsigned*) suffix="-unsigned" ;; esac
-            cp "$apk" "dist/kindle-display-${KINDLED_VERSION}${suffix}.apk"
+          for flavor in mirror control; do
+            for apk in "app/build/outputs/apk/$flavor/release"/*.apk; do
+              [ -e "$apk" ] || continue
+              suffix=""
+              case "$apk" in *unsigned*) suffix="-unsigned" ;; esac
+              cp "$apk" "dist/kindle-display-${KINDLED_VERSION}-${flavor}${suffix}.apk"
+            done
+            cp "app/build/outputs/apk/$flavor/debug/app-$flavor-debug.apk" \
+              "dist/kindle-display-${KINDLED_VERSION}-${flavor}-debug.apk"
           done
-          cp app/build/outputs/apk/debug/app-debug.apk \
-            "dist/kindle-display-${KINDLED_VERSION}-debug.apk"
           ls -l dist
+
+      # The mirror build exists solely so that Play Protect has nothing to
+      # object to. If an accessibility declaration ever leaks back into it,
+      # the APK stops installing and nobody finds out until they try.
+      - name: Assert the mirror APK declares no accessibility service
+        working-directory: android
+        run: |
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          checked=0
+          for apk in app/build/outputs/apk/mirror/release/*.apk; do
+            [ -e "$apk" ] || continue
+            echo "checking $apk"
+            if "$aapt2" dump xmltree --file AndroidManifest.xml "$apk" \
+                | grep -iE 'BIND_ACCESSIBILITY|accessibilityservice'; then
+              echo "::error::mirror APK declares an accessibility service"
+              exit 1
+            fi
+            checked=$((checked + 1))
+          done
+          # A check that silently inspects nothing is worse than no check.
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::no mirror release APK found to check"
+            exit 1
+          fi
+          echo "clean: $checked mirror APK(s), no accessibility declaration"
 
       - uses: actions/upload-artifact@v4
         with:

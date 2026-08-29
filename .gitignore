@@ -13,3 +13,6 @@
 .idea/
 /android/app/build/
 /android/.kotlin/
+
+# Collected release artifacts (CI writes these; they are never committed).
+dist/

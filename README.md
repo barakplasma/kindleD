@@ -70,10 +70,17 @@ dependencies, so a Kindle only ever needs the one file.
 
 ### Android app
 
+The app has two flavours. They share everything except whether the Kindle
+can control the phone or only watch it — see [Which build to install](#which-build-to-install).
+
 ```
 cd android
-./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest lintDebug
+./gradlew assembleMirrorDebug    # app/build/outputs/apk/mirror/debug/
+./gradlew assembleControlDebug   # app/build/outputs/apk/control/debug/
+./gradlew assemble               # everything
+
+./gradlew testMirrorDebugUnitTest testControlDebugUnitTest
+./gradlew lintMirrorDebug lintControlDebug
 ```
 
 Needs the Android SDK (platform 35, build-tools 35) and a JDK 17+.
@@ -144,13 +151,64 @@ If the Kindle framework repaints over the streamed image, stop it
 (`stop lab126_gui`, and `start lab126_gui` or reboot afterwards). There is a
 commented line for this in `kindled-start.sh`.
 
+### Which build to install
+
+| | `mirror` | `control` |
+| --- | --- | --- |
+| Kindle shows the phone's screen | yes | yes |
+| Kindle taps and scrolls do something | **no** | yes |
+| Installs normally | **yes** | no — Play Protect blocks it |
+| Declares an accessibility service | no | yes |
+
+**Start with `mirror`.** It installs like any other APK and proves the whole
+chain — hotspot, link, frames, e-ink refresh — without a fight.
+
+Injecting a touch requires an accessibility service, and that declaration
+alone is enough for Play Protect to refuse a sideloaded install with *"This
+app can request access to sensitive data… identity theft or financial
+fraud"*. It is reacting to the manifest, not to anything in the code, and a
+properly signed release APK is blocked exactly the same way. So the mirror
+build ships without any accessibility service at all — no manifest entry and
+no class in the DEX, which CI asserts on every build.
+
+A mirror-only phone advertises `no-input` in its `READY` line, so the Kindle
+stops sending gestures rather than firing them into a phone that will drop
+them. See [PROTOCOL.md](PROTOCOL.md#capabilities).
+
 ### On the Pixel
 
-1. Install the APK.
-2. Grant **Accessibility** to "Kindle Display" — without it, taps and
-   scrolls arrive and go nowhere.
-3. Grant **Display over other apps** — needed only for the screen blackout.
-4. Turn on the hotspot, join the Kindle to it, pick an app, press Start.
+1. Install the APK — for `mirror`, the normal way:
+
+   ```
+   adb install -r kindle-display-<version>-mirror-debug.apk
+   ```
+
+   Use a `-debug` APK unless you configured signing secrets; an `-unsigned`
+   one cannot be installed at all.
+
+2. Grant **Display over other apps** — needed only for the screen blackout.
+3. Turn on the hotspot, join the Kindle to it, pick an app, press Start.
+
+#### Installing the control build
+
+Sideloading it needs two extra steps, and neither is optional:
+
+1. Install over ADB. The Play Protect block targets installs from browsers,
+   file managers and messaging apps; `adb install` is the way through.
+
+   ```
+   adb install -r kindle-display-<version>-control-debug.apk
+   ```
+
+   If Play Protect still refuses: Play Store → profile → Play Protect → ⚙ →
+   turn off scanning, install, turn it back on.
+
+2. Unlock the accessibility toggle. Android hides it for sideloaded apps:
+   **Settings → Apps → Kindle Display → ⋮ → Allow restricted settings**,
+   then **Settings → Accessibility → Kindle Display → enable**.
+
+Without step 2 the app installs and runs, but taps and scrolls arrive and go
+nowhere. Menu wording moves around between Android versions.
 
 ## Travel workflow
 
