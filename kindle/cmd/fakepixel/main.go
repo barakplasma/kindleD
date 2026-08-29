@@ -28,6 +28,7 @@ func main() {
 	listen := flag.String("listen", ":45831", "address to listen on")
 	interval := flag.Duration("interval", 333*time.Millisecond, "frame interval")
 	ackDeadline := flag.Duration("ack-deadline", time.Second, "how long to wait for an ACK before sending anyway")
+	mirrorOnly := flag.Bool("mirror-only", false, "advertise no-input, like the mirror build of the phone app")
 	flag.Parse()
 
 	ln, err := net.Listen("tcp", *listen)
@@ -42,11 +43,11 @@ func main() {
 			log.Printf("accept: %v", err)
 			continue
 		}
-		go serve(conn, *interval, *ackDeadline)
+		go serve(conn, *interval, *ackDeadline, *mirrorOnly)
 	}
 }
 
-func serve(conn net.Conn, interval, ackDeadline time.Duration) {
+func serve(conn net.Conn, interval, ackDeadline time.Duration, mirrorOnly bool) {
 	defer conn.Close()
 	if tcp, ok := conn.(*net.TCPConn); ok {
 		tcp.SetNoDelay(true)
@@ -75,7 +76,11 @@ func serve(conn net.Conn, interval, ackDeadline time.Duration) {
 		return
 	}
 	log.Printf("panel %dx%d", w, h)
-	fmt.Fprintf(conn, "READY %d %d %d\n", w, h, int(time.Second/interval))
+	caps := ""
+	if mirrorOnly {
+		caps = " no-input"
+	}
+	fmt.Fprintf(conn, "READY %d %d %d%s\n", w, h, int(time.Second/interval), caps)
 
 	var (
 		mu     sync.Mutex

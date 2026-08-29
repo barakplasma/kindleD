@@ -15,7 +15,7 @@ import android.view.accessibility.AccessibilityEvent
  * which is what makes the whole arrangement work: the phone's own screen is
  * not touched, only the display the Kindle is looking at.
  */
-class KindleAccessibilityService : AccessibilityService() {
+class KindleAccessibilityService : AccessibilityService(), GestureInjector {
 
     companion object {
         private const val TAG = "KindleA11y"
@@ -56,7 +56,7 @@ class KindleAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     /** Taps [x],[y] on [displayId], in that display's coordinate space. */
-    fun tap(displayId: Int, x: Float, y: Float) {
+    override fun tap(displayId: Int, x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         dispatch(displayId, path, TAP_DURATION_MS, "tap($x,$y)")
     }
@@ -68,7 +68,7 @@ class KindleAccessibilityService : AccessibilityService() {
      * down means dragging the finger up. The caller does that conversion;
      * this method just draws the line it is given.
      */
-    fun swipe(displayId: Int, x: Float, fromY: Float, toY: Float) {
+    override fun swipe(displayId: Int, x: Float, fromY: Float, toY: Float) {
         val path = Path().apply {
             moveTo(x, fromY)
             lineTo(x, toY)

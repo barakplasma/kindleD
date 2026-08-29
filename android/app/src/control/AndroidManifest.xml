@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Control flavour only.
+
+    Declaring an accessibility service is what lets the app synthesise the
+    Kindle's taps and swipes onto the virtual display. It is also, on its
+    own, enough for Play Protect to block a sideloaded install and for
+    Android to hide the enable switch behind "Allow restricted settings".
+    That is why it lives here rather than in the main manifest: the mirror
+    flavour ships without any of it.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <service
+            android:name=".KindleAccessibilityService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+    </application>
+</manifest>

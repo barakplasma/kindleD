@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -66,9 +67,43 @@ type Client struct {
 	renderer *Renderer
 	gestures <-chan Gesture
 
-	// FrameSize is set from the server's READY line: the coordinate space
-	// gestures must use. Read it with FrameGeometry.
+	// mu guards everything learned from the server's READY line, which the
+	// read loop writes and the gesture pump reads.
+	mu sync.Mutex
+	// frameW, frameH are the coordinate space gestures must use.
 	frameW, frameH int
+	// ready is false until READY arrives. Gestures are held back until
+	// then: before READY the coordinate space is a guess.
+	ready bool
+	// mirrorOnly records that the Pixel advertised "no-input" in READY,
+	// meaning it will not act on gestures. Absence of the token means the
+	// Pixel takes input, which is what every build before the capability
+	// existed did -- so an older phone app keeps working unchanged.
+	mirrorOnly bool
+}
+
+// setReady records what the server told us in READY.
+func (c *Client) setReady(w, h int, mirrorOnly bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.frameW, c.frameH = w, h
+	c.ready = true
+	c.mirrorOnly = mirrorOnly
+}
+
+// clearReady forgets the previous session's terms.
+func (c *Client) clearReady() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ready = false
+	c.mirrorOnly = false
+}
+
+// inputAccepted reports whether sending a gesture is worth the bytes.
+func (c *Client) inputAccepted() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.ready && !c.mirrorOnly
 }
 
 // NewClient wires the network to the renderer and the touchscreen.
@@ -200,7 +235,11 @@ func parseDefaultGateway(r io.Reader) (string, error) {
 }
 
 // FrameGeometry returns the coordinate space the Pixel is streaming in.
-func (c *Client) FrameGeometry() (int, int) { return c.frameW, c.frameH }
+func (c *Client) FrameGeometry() (int, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.frameW, c.frameH
+}
 
 func (c *Client) session(ctx context.Context, addr string) error {
 	dialer := net.Dialer{Timeout: 5 * time.Second}
@@ -212,6 +251,7 @@ func (c *Client) session(ctx context.Context, addr string) error {
 	if tcp, ok := conn.(*net.TCPConn); ok {
 		tcp.SetNoDelay(true)
 	}
+	c.clearReady()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -283,6 +323,11 @@ func (c *Client) readLoop(ctx context.Context, conn net.Conn, br *bufio.Reader, 
 			case seq := <-c.renderer.Rendered:
 				sendLine(out, fmt.Sprintf("ACK %d", seq))
 			case g := <-c.gestures:
+				if !c.inputAccepted() {
+					// Either the phone is mirror-only, or READY has not
+					// arrived and the coordinate space is still a guess.
+					continue
+				}
 				if line := g.Line(); line != "" {
 					c.cfg.Logf("gesture %s", line)
 					sendLine(out, line)
@@ -304,7 +349,11 @@ func (c *Client) readLoop(ctx context.Context, conn net.Conn, br *bufio.Reader, 
 			if !ok {
 				return fmt.Errorf("bad READY: %q", line)
 			}
-			c.frameW, c.frameH = w, h
+			mirrorOnly := hasCapability(rest, "no-input")
+			c.setReady(w, h, mirrorOnly)
+			if mirrorOnly {
+				c.cfg.Logf("pixel is a mirror-only build: touches will not be sent")
+			}
 			if c.cfg.OnGeometry != nil {
 				c.cfg.OnGeometry(w, h)
 			}
@@ -371,6 +420,27 @@ func splitVerb(line string) (verb, rest string) {
 		return line[:i], strings.TrimSpace(line[i+1:])
 	}
 	return line, ""
+}
+
+// hasCapability reports whether a READY line's trailing tokens include name.
+// Capabilities start after the three fixed fields (width, height, fps), and
+// unknown ones are ignored, so either end can gain features independently.
+//
+// Capabilities are only ever added for behaviour that differs from what the
+// protocol did before they existed, which is why the mirror build advertises
+// "no-input" rather than control builds advertising "input": a phone running
+// a version older than this still gets its gestures.
+func hasCapability(rest, name string) bool {
+	fields := strings.Fields(rest)
+	if len(fields) <= 3 {
+		return false
+	}
+	for _, f := range fields[3:] {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 func parseTwoInts(s string) (int, int, bool) {

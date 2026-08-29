@@ -200,3 +200,79 @@ func TestSessionSurvivesBadFrameHeader(t *testing.T) {
 	expectLine(t, br2, "HELLO kindled/1 1072 1448")
 	_ = conn2
 }
+
+func TestHasCapability(t *testing.T) {
+	cases := []struct {
+		rest string
+		want bool
+	}{
+		{"1072 1448 3", false},         // pre-capability server
+		{"1072 1448 3 no-input", true}, // mirror build
+		{"1072 1448 3 future no-input", true},
+		{"1072 1448 3 input", false}, // unrelated token
+		{"1072 1448", false},         // truncated
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := hasCapability(c.rest, "no-input"); got != c.want {
+			t.Errorf("hasCapability(%q) = %v, want %v", c.rest, got, c.want)
+		}
+	}
+}
+
+// sync sends a frame and waits for its ack, which proves the client has
+// finished processing everything sent before it -- READY included.
+func (tc *testClient) sync(t *testing.T, conn net.Conn, br *bufio.Reader, seq int) {
+	t.Helper()
+	jpeg := []byte("frame")
+	fmt.Fprintf(conn, "FRAME %d %d\n", seq, len(jpeg))
+	conn.Write(jpeg)
+	expectLine(t, br, fmt.Sprintf("ACK %d", seq))
+}
+
+// A mirror-only phone cannot act on touches, so the Kindle should not spend
+// the link sending them.
+func TestMirrorOnlyPixelSuppressesGestures(t *testing.T) {
+	tc := newTestClient(t)
+	conn, br := tc.accept(t)
+	expectLine(t, br, "HELLO kindled/1 1072 1448")
+	fmt.Fprintf(conn, "READY 1072 1448 3 no-input\n")
+	tc.sync(t, conn, br, 1)
+
+	tc.gestures <- Gesture{Kind: "SCROLL", DY: 500}
+	tc.gestures <- Gesture{Kind: "TAP", X: 1, Y: 2}
+
+	// Frames keep flowing; only the gestures are dropped. Had either been
+	// sent it would arrive ahead of this ack.
+	tc.sync(t, conn, br, 2)
+}
+
+// The phone app released before capabilities existed says nothing, and must
+// keep receiving gestures.
+func TestPreCapabilityPixelStillGetsGestures(t *testing.T) {
+	tc := newTestClient(t)
+	conn, br := tc.accept(t)
+	expectLine(t, br, "HELLO kindled/1 1072 1448")
+	fmt.Fprintf(conn, "READY 1072 1448 3\n")
+	tc.sync(t, conn, br, 1)
+
+	tc.gestures <- Gesture{Kind: "SCROLL", DY: 500}
+	expectLine(t, br, "SCROLL 500")
+}
+
+// Until READY lands the frame geometry is a guess, so a gesture that beats
+// it would carry coordinates in the wrong space.
+func TestGesturesHeldUntilReady(t *testing.T) {
+	tc := newTestClient(t)
+	conn, br := tc.accept(t)
+	expectLine(t, br, "HELLO kindled/1 1072 1448")
+
+	tc.gestures <- Gesture{Kind: "TAP", X: 5, Y: 5}
+	time.Sleep(20 * time.Millisecond)
+
+	fmt.Fprintf(conn, "READY 1072 1448 3\n")
+	tc.sync(t, conn, br, 1)
+
+	tc.gestures <- Gesture{Kind: "SCROLL", DY: 7}
+	expectLine(t, br, "SCROLL 7") // the pre-READY tap never appears
+}

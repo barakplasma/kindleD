@@ -89,7 +89,16 @@ jobs:
           | --- | --- |
           | `kindled-*-linux-armv7` | a jailbroken Kindle (32-bit userland) |
           | `kindled-*-linux-arm64` | a Kindle with a 64-bit userland |
-          | `kindle-display-*.apk` | the Pixel |
+          | `kindle-display-*-mirror-*.apk` | the Pixel — **start here** |
+          | `kindle-display-*-control-*.apk` | the Pixel, once mirroring works |
+
+          **Install the mirror build first.** It shows the phone's screen on
+          the Kindle and installs like any other APK. The control build adds
+          tap and scroll, which needs an accessibility service — and that
+          declaration alone makes Play Protect block a sideloaded install, so
+          it has to go on with `adb install` and then be unlocked under
+          Settings → Apps → ⋮ → Allow restricted settings. The README has the
+          steps.
 
           The `kindled` binaries are static and dependency-free: copy one
           onto the device and run it. See the README for install steps and

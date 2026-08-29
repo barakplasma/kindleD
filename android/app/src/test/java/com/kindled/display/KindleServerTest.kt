@@ -141,6 +141,31 @@ class KindleServerTest {
         }
     }
 
+    /**
+     * The capability token is what tells a Kindle whether sending gestures
+     * is worth the bytes. It has to match the flavour actually built, so
+     * this asserts against [InputSupport] rather than hardcoding either
+     * answer -- it runs in both variants.
+     */
+    @Test
+    fun readyAdvertisesNoInputOnlyInTheMirrorBuild() {
+        FakeKindle().use { kindle ->
+            val ready = kindle.readLine().split(" ")
+            val caps = ready.drop(4)
+            if (InputSupport.AVAILABLE) {
+                assertTrue(
+                    "control build must not claim no-input: $ready",
+                    !caps.contains("no-input"),
+                )
+            } else {
+                assertTrue(
+                    "mirror build must advertise no-input: $ready",
+                    caps.contains("no-input"),
+                )
+            }
+        }
+    }
+
     @Test
     fun refusesUnknownProtocolVersion() {
         FakeKindle(hello = "HELLO someoneelse/9 100 100").use { kindle ->

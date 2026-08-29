@@ -46,7 +46,7 @@ The Kindle speaks first:
 The Pixel replies:
 
 ```
-← READY <width> <height> <fps>
+← READY <width> <height> <fps> [capability ...]
 ```
 
 `<width> <height>` is the size of the frames the Pixel will actually send,
@@ -54,6 +54,29 @@ and the coordinate space that `TAP`/`SCROLL` must use. It is normally an
 echo of the Kindle's panel size, but the Kindle MUST accept a different one
 and MUST NOT rescale gesture coordinates itself. `<fps>` is the Pixel's
 target frame rate, informational only.
+
+The Kindle MUST NOT send `TAP` or `SCROLL` before `READY`: until it lands,
+the coordinate space is a guess.
+
+### Capabilities
+
+`READY` may carry any number of trailing capability tokens. Unknown tokens
+MUST be ignored, so either end can gain features without a version bump.
+
+| Capability | Meaning |
+| --- | --- |
+| `no-input` | The Pixel will not act on `TAP` or `SCROLL`. The Kindle SHOULD stop sending them. |
+
+A capability is only ever defined for behaviour that *differs* from what the
+protocol did before capabilities existed. That is why the mirror build of the
+phone app advertises `no-input`, rather than control builds advertising
+`input`: silence keeps meaning what it always meant, so a Kindle running new
+firmware still drives a phone running an older app.
+
+`no-input` exists because Play Protect blocks the sideloading of any app that
+declares an accessibility service — the only way an ordinary Android app can
+synthesise touches. The mirror build ships without one, so it can render the
+phone's screen but can never act on a gesture.
 
 If the server refuses the session it answers `BYE <reason>` and closes.
 

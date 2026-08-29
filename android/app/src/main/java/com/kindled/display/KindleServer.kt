@@ -244,7 +244,13 @@ class KindleServer(
                 frameWidth = w
                 frameHeight = h
                 val fps = (1000 / frameIntervalMs).toInt()
-                sendLine("READY $frameWidth $frameHeight $fps")
+                // Trailing capability token. Only the mirror build says
+                // anything: "no-input" tells the Kindle not to send gestures
+                // at a phone that will drop them. Silence means input works,
+                // which is how every build behaved before capabilities
+                // existed, so an older daemon is unaffected either way.
+                val caps = if (InputSupport.AVAILABLE) "" else " no-input"
+                sendLine("READY $frameWidth $frameHeight $fps$caps")
                 Log.i(TAG, "kindle ${parts[1]} ${kindleW}x$kindleH connected")
                 listener.onKindleConnected(kindleW, kindleH)
 
